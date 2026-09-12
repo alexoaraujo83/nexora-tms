@@ -20,7 +20,9 @@ function parseNonNegativeInteger(value: unknown, field: string): number {
   return parsed;
 }
 
-export function parseTransportRequestListQuery(input: unknown): TransportRequestListQuery {
+export function parseTransportRequestListQuery(
+  input: unknown,
+): TransportRequestListQuery {
   if (input === undefined || input === null) {
     return { limit: DEFAULT_LIMIT, offset: 0 };
   }
