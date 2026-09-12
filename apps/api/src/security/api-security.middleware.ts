@@ -1,11 +1,11 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
-const ALLOWED_BODY_CONTENT_TYPES = [
+const ALLOWED_BODY_CONTENT_TYPES = new Set([
   'application/json',
   'application/octet-stream',
   'multipart/form-data',
-];
+]);
 
 export type ApiSecurityRequest = IncomingMessage & {
   originalUrl?: string;
@@ -103,15 +103,24 @@ function hasRequestBody(request: ApiSecurityRequest): boolean {
   return contentLength !== undefined && contentLength !== '0';
 }
 
+function parseMediaType(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const mediaType = value.split(';', 1)[0]?.trim().toLowerCase();
+  return mediaType && /^[!#$%&'*+.^_`|~0-9a-z-]+\/[!#$%&'*+.^_`|~0-9a-z-]+$/.test(mediaType)
+    ? mediaType
+    : undefined;
+}
+
 function acceptedContentType(request: ApiSecurityRequest): boolean {
   if (!hasRequestBody(request)) {
     return true;
   }
 
-  const contentType = firstHeaderValue(request.headers['content-type'])?.toLowerCase();
-  return Boolean(
-    contentType && ALLOWED_BODY_CONTENT_TYPES.some((allowed) => contentType.startsWith(allowed)),
-  );
+  const contentType = parseMediaType(firstHeaderValue(request.headers['content-type']));
+  return contentType !== undefined && ALLOWED_BODY_CONTENT_TYPES.has(contentType);
 }
 
 function declaredBodySize(request: ApiSecurityRequest): number | undefined {
