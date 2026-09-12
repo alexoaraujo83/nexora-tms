@@ -50,6 +50,7 @@ interface TransportRequestRow {
   readonly updated_by_user_id: string;
   readonly created_at: Date;
   readonly updated_at: Date;
+  readonly row_version: string;
 }
 
 interface PartyReferenceRow {
@@ -72,7 +73,8 @@ const requestSelect = `
     created_by_user_id::text AS created_by_user_id,
     updated_by_user_id::text AS updated_by_user_id,
     created_at,
-    updated_at
+    updated_at,
+    xmin::text AS row_version
   FROM transport_requests
 `;
 
@@ -152,16 +154,16 @@ export class TransportRequestService {
     const context = this.tenantContext.require();
 
     return this.database.withTenantContext(context, async (client) => {
-      const before = await this.requireRequest(client, requestId);
-      if (before.status === 'contracted' || before.status === 'cancelled') {
+      const before = await this.requireRequestWithVersion(client, requestId);
+      if (before.request.status === 'contracted' || before.request.status === 'cancelled') {
         throw new ConflictException(
-          `Transport request cannot be edited while status is ${before.status}`,
+          `Transport request cannot be edited while status is ${before.request.status}`,
         );
       }
       if (
         patch.status !== undefined &&
-        before.status !== 'draft' &&
-        before.status !== 'ready_for_quote'
+        before.request.status !== 'draft' &&
+        before.request.status !== 'ready_for_quote'
       ) {
         throw new ConflictException(
           'Lifecycle status is controlled by negotiation after ready_for_quote',
@@ -169,15 +171,15 @@ export class TransportRequestService {
       }
 
       const merged = {
-        customerPartyId: patch.customerPartyId ?? before.customerPartyId,
-        shipperPartyId: patch.shipperPartyId ?? before.shipperPartyId,
-        consigneePartyId: patch.consigneePartyId ?? before.consigneePartyId,
-        originAddressId: patch.originAddressId ?? before.originAddressId,
-        destinationAddressId: patch.destinationAddressId ?? before.destinationAddressId,
-        plannedPickupAt: patch.plannedPickupAt ?? new Date(before.plannedPickupAt),
-        plannedDeliveryAt: patch.plannedDeliveryAt ?? new Date(before.plannedDeliveryAt),
-        cargoDescription: patch.cargoDescription ?? before.cargoDescription,
-        status: patch.status ?? before.status,
+        customerPartyId: patch.customerPartyId ?? before.request.customerPartyId,
+        shipperPartyId: patch.shipperPartyId ?? before.request.shipperPartyId,
+        consigneePartyId: patch.consigneePartyId ?? before.request.consigneePartyId,
+        originAddressId: patch.originAddressId ?? before.request.originAddressId,
+        destinationAddressId: patch.destinationAddressId ?? before.request.destinationAddressId,
+        plannedPickupAt: patch.plannedPickupAt ?? new Date(before.request.plannedPickupAt),
+        plannedDeliveryAt: patch.plannedDeliveryAt ?? new Date(before.request.plannedDeliveryAt),
+        cargoDescription: patch.cargoDescription ?? before.request.cargoDescription,
+        status: patch.status ?? before.request.status,
       };
 
       assertPlannedWindow(merged.plannedPickupAt, merged.plannedDeliveryAt);
@@ -200,7 +202,7 @@ export class TransportRequestService {
                 updated_by_user_id = $11::uuid,
                 updated_at = now()
           WHERE id = $1::uuid
-            AND updated_at = $12::timestamptz`,
+            AND xmin::text = $12`,
         [
           requestId,
           merged.customerPartyId,
@@ -213,7 +215,7 @@ export class TransportRequestService {
           merged.cargoDescription,
           merged.status,
           context.userId,
-          before.updatedAt,
+          before.rowVersion,
         ],
       );
 
@@ -239,6 +241,20 @@ export class TransportRequestService {
       throw new NotFoundException('Transport request not found in current tenant');
     }
     return mapTransportRequest(row);
+  }
+
+  private async requireRequestWithVersion(
+    client: TenantQueryClient,
+    requestId: string,
+  ): Promise<{ request: TransportRequest; rowVersion: string }> {
+    const result = await client.query<TransportRequestRow>(`${requestSelect} WHERE id = $1::uuid`, [
+      requestId,
+    ]);
+    const row = result.rows[0];
+    if (!row) {
+      throw new NotFoundException('Transport request not found in current tenant');
+    }
+    return { request: mapTransportRequest(row), rowVersion: row.row_version };
   }
 
   private async assertReferences(
