@@ -132,6 +132,79 @@ test('request bodies require a supported content type', () => {
   assert.match(res.body, /UNSUPPORTED_MEDIA_TYPE/);
 });
 
+test('content type validation compares the parsed media type exactly', () => {
+  const middleware = createApiSecurityMiddleware({
+    config: {
+      windowMs: 60_000,
+      globalMaxRequests: 10,
+      sensitiveMaxRequests: 5,
+      maxTrackedClients: 100,
+      maxBodyBytes: 1_024,
+      trustForwardedFor: false,
+    },
+  });
+
+  const validJson = response();
+  middleware(
+    request({
+      method: 'POST',
+      headers: { 'content-length': '10', 'content-type': 'Application/JSON; charset=utf-8' },
+    }),
+    validJson as unknown as ServerResponse,
+    () => undefined,
+  );
+  assert.equal(validJson.statusCode, 200);
+
+  const spoofed = response();
+  middleware(
+    request({
+      method: 'POST',
+      headers: { 'content-length': '10', 'content-type': 'application/json-malicious' },
+    }),
+    spoofed as unknown as ServerResponse,
+    () => assert.fail('must not continue'),
+  );
+  assert.equal(spoofed.statusCode, 415);
+});
+
+test('multipart media types are accepted only when the base type is valid', () => {
+  const middleware = createApiSecurityMiddleware({
+    config: {
+      windowMs: 60_000,
+      globalMaxRequests: 10,
+      sensitiveMaxRequests: 5,
+      maxTrackedClients: 100,
+      maxBodyBytes: 1_024,
+      trustForwardedFor: false,
+    },
+  });
+
+  const validMultipart = response();
+  middleware(
+    request({
+      method: 'POST',
+      headers: {
+        'content-length': '10',
+        'content-type': 'multipart/form-data; boundary=----nexora',
+      },
+    }),
+    validMultipart as unknown as ServerResponse,
+    () => undefined,
+  );
+  assert.equal(validMultipart.statusCode, 200);
+
+  const invalidMultipart = response();
+  middleware(
+    request({
+      method: 'POST',
+      headers: { 'content-length': '10', 'content-type': 'multipart/form-data-malicious' },
+    }),
+    invalidMultipart as unknown as ServerResponse,
+    () => assert.fail('must not continue'),
+  );
+  assert.equal(invalidMultipart.statusCode, 415);
+});
+
 test('oversized request payloads fail closed before controller execution', () => {
   const middleware = createApiSecurityMiddleware({
     config: {
