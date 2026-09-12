@@ -186,7 +186,7 @@ export class TransportRequestService {
       }
       await this.assertReferences(client, merged);
 
-      await client.query(
+      const updated = await client.query(
         `UPDATE transport_requests
             SET customer_party_id = $2::uuid,
                 shipper_party_id = $3::uuid,
@@ -199,7 +199,8 @@ export class TransportRequestService {
                 status = $10::transport_request_status,
                 updated_by_user_id = $11::uuid,
                 updated_at = now()
-          WHERE id = $1::uuid`,
+          WHERE id = $1::uuid
+            AND updated_at = $12::timestamptz`,
         [
           requestId,
           merged.customerPartyId,
@@ -212,8 +213,15 @@ export class TransportRequestService {
           merged.cargoDescription,
           merged.status,
           context.userId,
+          before.updatedAt,
         ],
       );
+
+      if (updated.rowCount !== 1) {
+        throw new ConflictException(
+          'Transport request was modified concurrently; reload it and retry the update',
+        );
+      }
 
       return this.requireRequest(client, requestId);
     });
