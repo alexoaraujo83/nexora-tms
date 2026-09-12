@@ -45,6 +45,26 @@ test('transaction validates positive money and reversal reference', () => {
   );
 });
 
+test('money validation preserves decimal strings without IEEE-754 rounding', () => {
+  const parsed = parseCreateCarrierPaymentTransaction({ kind: 'payment', amount: '0.10' });
+  assert.equal(parsed.amount, '0.10');
+
+  const maximum = parseCreateCarrierPaymentTransaction({
+    kind: 'payment',
+    amount: '999999999999.99',
+  });
+  assert.equal(maximum.amount, '999999999999.99');
+
+  assert.throws(
+    () => parseCreateCarrierPaymentTransaction({ kind: 'payment', amount: '1000000000000.00' }),
+    /positive monetary value/,
+  );
+  assert.throws(
+    () => parseCreateCarrierPaymentTransaction({ kind: 'payment', amount: '0.00' }),
+    /must be greater than zero/,
+  );
+});
+
 test('obligation update rejects empty payload', () => {
   assert.throws(() => parseUpdateCarrierPaymentObligation({}), /at least one obligation field/);
 });
