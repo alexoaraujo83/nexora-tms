@@ -16,13 +16,13 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NEON_PROJECT_ID: raspy-river-76339604
+  NEON_PROJECT_ID: morning-grass-06967990
   PGSSLMODE: verify-full
   PGSSLROOTCERT: /etc/ssl/certs/ca-certificates.crt
 
 jobs:
   bootstrap:
-    name: Verify canonical Neon production root branch
+    name: Verify canonical root/default production branch
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: production
@@ -67,7 +67,7 @@ jobs:
             "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches")"
 
           branch_id="$(jq -er '[.branches[] | select(.name == "production" and (.parent_id? == null) and .default == true)][0].id' <<<"$branches_json")" || {
-            echo "Canonical Neon production must exist as the root/default branch. Run Neon Production Topology first if the bootstrap-created child still exists." >&2
+            echo "Canonical Neon production must exist as the root/default branch." >&2
             exit 1
           }
 
@@ -103,7 +103,7 @@ jobs:
             -H "Authorization: Bearer ${NEON_API_KEY}" \
             --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
             --data-urlencode "database_name=nexora" \
-            --data-urlencode "role_name=neondb_owner" \
+            --data-urlencode "role_name=nexora_owner" \
             --data-urlencode "pooled=false" \
             "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
             | jq -er '.uri')"
@@ -233,7 +233,7 @@ jobs:
             echo "- Branch: production"
             echo "- Branch type: root"
             echo "- Default branch: yes"
-            echo "- Database: neondb"
+            echo "- Database: nexora"
             echo "- TLS required: yes"
             echo "- TLS protocol: ${TLS_VERSION}"
             echo "- TLS cipher reported: yes"
@@ -243,4 +243,3 @@ jobs:
             echo "- Railway variables changed: no"
             echo "- API redeployed: no"
           } >> "$GITHUB_STEP_SUMMARY"
-
