@@ -1,6 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 
 import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
+import {
+  parseTransportRequestListQuery,
+  type TransportRequestListQuery,
+} from './transport-request-list.validation.js';
 import { TransportRequestService, type TransportRequest } from './transport-request.service.js';
 
 @Controller('api/v1/freight/transport-requests')
@@ -9,8 +13,9 @@ export class TransportRequestController {
 
   @Get()
   @TenantAuthorized('freight.read')
-  list(): Promise<readonly TransportRequest[]> {
-    return this.transportRequests.list();
+  list(@Query() query: Record<string, unknown>): Promise<readonly TransportRequest[]> {
+    const pagination: TransportRequestListQuery = parseTransportRequestListQuery(query);
+    return this.transportRequests.list(pagination);
   }
 
   @Post()

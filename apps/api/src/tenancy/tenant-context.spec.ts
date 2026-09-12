@@ -107,6 +107,33 @@ test('tenant guard rejects malformed tenant selection before membership lookup',
   );
 });
 
+test('tenant guard rejects ambiguous repeated tenant headers before membership lookup', async () => {
+  let membershipChecks = 0;
+  const memberships = {
+    isActiveMember: async () => {
+      membershipChecks += 1;
+      return true;
+    },
+  } as unknown as TenantMembershipService;
+  const guard = new TenantContextGuard(memberships, new TenantContext());
+
+  await assert.rejects(
+    guard.canActivate(
+      executionContextFor({
+        authenticatedPrincipal: {
+          subject: 'idp|user-1',
+          userId: USER_ID,
+        },
+        headers: {
+          'x-nexora-tenant-id': [TENANT_A, TENANT_B],
+        },
+      }),
+    ),
+    (error: unknown) => error instanceof BadRequestException,
+  );
+  assert.equal(membershipChecks, 0);
+});
+
 test('tenant guard rejects a selected tenant without an active membership', async () => {
   const guard = new TenantContextGuard(membershipService(false), new TenantContext());
 
@@ -123,6 +150,25 @@ test('tenant guard rejects a selected tenant without an active membership', asyn
       }),
     ),
     (error: unknown) => error instanceof ForbiddenException,
+  );
+});
+
+test('tenant context cannot be replaced with another tenant during the same request', () => {
+  const tenantContext = new TenantContext();
+  tenantContext.establish({
+    subject: 'idp|user-1',
+    tenantId: TENANT_A,
+    userId: USER_ID,
+  });
+
+  assert.throws(
+    () =>
+      tenantContext.establish({
+        subject: 'idp|user-1',
+        tenantId: TENANT_B,
+        userId: USER_ID,
+      }),
+    InternalServerErrorException,
   );
 });
 
