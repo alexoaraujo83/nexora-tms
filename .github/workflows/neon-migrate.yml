@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NEON_PROJECT_ID: raspy-river-76339604
+  NEON_PROJECT_ID: morning-grass-06967990
 
 jobs:
   migrate:
@@ -77,7 +77,7 @@ jobs:
           parent_branch: production
           branch_name: ${{ steps.target.outputs.environment }}
           database: nexora
-          role: neondb_owner
+          role: nexora_owner
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Ensure PostgreSQL client
@@ -154,198 +154,42 @@ jobs:
             SELECT count(*) INTO tables_count
               FROM information_schema.tables
              WHERE table_schema='public'
-               AND table_name IN (
-                 'documents','document_versions','document_validations','business_party_documents','transport_request_documents'
-               );
-            IF tables_count <> 5 THEN
-              RAISE EXCEPTION 'Wave 0018 document tables incomplete: %', tables_count;
-            END IF;
-
+               AND table_name IN ('documents','document_versions','document_validations','business_party_documents','transport_request_documents');
+            IF tables_count <> 5 THEN RAISE EXCEPTION 'Wave 0018 document tables incomplete: %', tables_count; END IF;
             SELECT count(*) INTO rls_count
-              FROM pg_class c
-              JOIN pg_namespace n ON n.oid=c.relnamespace
-             WHERE n.nspname='public'
-               AND c.relname IN (
-                 'documents','document_versions','document_validations','business_party_documents','transport_request_documents'
-               )
-               AND c.relrowsecurity;
-            IF rls_count <> 5 THEN
-              RAISE EXCEPTION 'Wave 0018 document RLS incomplete: %', rls_count;
-            END IF;
-
+              FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+             WHERE n.nspname='public' AND c.relname IN ('documents','document_versions','document_validations','business_party_documents','transport_request_documents') AND c.relrowsecurity;
+            IF rls_count <> 5 THEN RAISE EXCEPTION 'Wave 0018 document RLS incomplete: %', rls_count; END IF;
             SELECT count(*) INTO tables_count
               FROM information_schema.tables
-             WHERE table_schema='public'
-               AND table_name IN (
-                 'transport_request_items','transport_request_packages','transport_request_requirements',
-                 'transport_request_references','transport_request_status_history','transport_request_events','freight_lanes'
-               );
-            IF tables_count <> 7 THEN
-              RAISE EXCEPTION 'Wave 0019 freight normalization tables incomplete: %', tables_count;
-            END IF;
-
+             WHERE table_schema='public' AND table_name IN ('transport_request_items','transport_request_packages','transport_request_requirements','transport_request_references','transport_request_status_history','transport_request_events','freight_lanes');
+            IF tables_count <> 7 THEN RAISE EXCEPTION 'Wave 0019 freight normalization tables incomplete: %', tables_count; END IF;
             SELECT count(*) INTO rls_count
-              FROM pg_class c
-              JOIN pg_namespace n ON n.oid=c.relnamespace
-             WHERE n.nspname='public'
-               AND c.relname IN (
-                 'transport_request_items','transport_request_packages','transport_request_requirements',
-                 'transport_request_references','transport_request_status_history','transport_request_events','freight_lanes'
-               )
-               AND c.relrowsecurity;
-            IF rls_count <> 7 THEN
-              RAISE EXCEPTION 'Wave 0019 freight normalization RLS incomplete: %', rls_count;
-            END IF;
-
-            IF NOT has_table_privilege('nexora_app','public.freight_lanes','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.freight_lanes','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.freight_lanes','UPDATE')
-               OR has_table_privilege('nexora_app','public.freight_lanes','DELETE') THEN
-              RAISE EXCEPTION 'Wave 0019 freight_lanes runtime privileges are incorrect';
-            END IF;
-
-            IF has_table_privilege('nexora_app','public.transport_request_status_history','UPDATE')
-               OR has_table_privilege('nexora_app','public.transport_request_status_history','DELETE')
-               OR has_table_privilege('nexora_app','public.transport_request_events','UPDATE')
-               OR has_table_privilege('nexora_app','public.transport_request_events','DELETE') THEN
-              RAISE EXCEPTION 'Wave 0019 history/events must remain append-only';
-            END IF;
-
-            SELECT count(*) INTO tables_count
-              FROM information_schema.tables
-             WHERE table_schema='public'
-               AND table_name IN (
-                 'matching_rules','matching_preferences','matching_runs','matching_candidates',
-                 'matching_candidate_scores','matching_rule_results','matching_rejections'
-               );
-            IF tables_count <> 7 THEN
-              RAISE EXCEPTION 'Wave 0020 matching tables incomplete: %', tables_count;
-            END IF;
-
-            SELECT count(*) INTO rls_count
-              FROM pg_class c
-              JOIN pg_namespace n ON n.oid=c.relnamespace
-             WHERE n.nspname='public'
-               AND c.relname IN (
-                 'matching_rules','matching_preferences','matching_runs','matching_candidates',
-                 'matching_candidate_scores','matching_rule_results','matching_rejections'
-               )
-               AND c.relrowsecurity;
-            IF rls_count <> 7 THEN
-              RAISE EXCEPTION 'Wave 0020 matching RLS incomplete: %', rls_count;
-            END IF;
-
-            IF EXISTS (
-              SELECT 1
-                FROM unnest(ARRAY['matching_rules','matching_preferences','matching_runs']) AS t(table_name)
-               WHERE NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'SELECT')
-                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'INSERT')
-                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'UPDATE')
-                  OR has_table_privilege('nexora_app', format('public.%I', table_name), 'DELETE')
-            ) THEN
-              RAISE EXCEPTION 'Wave 0020 mutable matching privileges are incorrect';
-            END IF;
-
-            IF EXISTS (
-              SELECT 1
-                FROM unnest(ARRAY['matching_candidates','matching_candidate_scores','matching_rule_results','matching_rejections']) AS t(table_name)
-               WHERE NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'SELECT')
-                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'INSERT')
-                  OR has_table_privilege('nexora_app', format('public.%I', table_name), 'UPDATE')
-                  OR has_table_privilege('nexora_app', format('public.%I', table_name), 'DELETE')
-            ) THEN
-              RAISE EXCEPTION 'Wave 0020 historical matching privileges are incorrect';
-            END IF;
-
-            SELECT count(*) INTO tables_count
-              FROM information_schema.tables
-             WHERE table_schema='public'
-               AND table_name IN ('negotiation_threads','negotiation_participants','negotiation_messages');
-            IF tables_count <> 3 THEN
-              RAISE EXCEPTION 'Wave 0021 negotiation tables incomplete: %', tables_count;
-            END IF;
-
-            SELECT count(*) INTO rls_count
-              FROM pg_class c
-              JOIN pg_namespace n ON n.oid=c.relnamespace
-             WHERE n.nspname='public'
-               AND c.relname IN ('negotiation_threads','negotiation_participants','negotiation_messages')
-               AND c.relrowsecurity;
-            IF rls_count <> 3 THEN
-              RAISE EXCEPTION 'Wave 0021 negotiation RLS incomplete: %', rls_count;
-            END IF;
-
-            IF EXISTS (
-              SELECT 1
-                FROM unnest(ARRAY['negotiation_threads','negotiation_participants']) AS t(table_name)
-               WHERE NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'SELECT')
-                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'INSERT')
-                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'UPDATE')
-                  OR has_table_privilege('nexora_app', format('public.%I', table_name), 'DELETE')
-            ) THEN
-              RAISE EXCEPTION 'Wave 0021 mutable negotiation privileges are incorrect';
-            END IF;
-
-            IF NOT has_table_privilege('nexora_app','public.negotiation_messages','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.negotiation_messages','INSERT')
-               OR has_table_privilege('nexora_app','public.negotiation_messages','UPDATE')
-               OR has_table_privilege('nexora_app','public.negotiation_messages','DELETE') THEN
-              RAISE EXCEPTION 'Wave 0021 negotiation_messages must remain append-only';
-            END IF;
-
-            IF NOT EXISTS (
-              SELECT 1
-                FROM pg_trigger t
-                JOIN pg_class c ON c.oid=t.tgrelid
-                JOIN pg_namespace n ON n.oid=c.relnamespace
-               WHERE n.nspname='public'
-                 AND c.relname='negotiation_messages'
-                 AND t.tgname='negotiation_messages_reply_scope_trigger'
-                 AND NOT t.tgisinternal
-            ) THEN
-              RAISE EXCEPTION 'Wave 0021 reply scope trigger is missing';
-            END IF;
-
-            SELECT count(*) INTO tables_count
-              FROM information_schema.tables
-             WHERE table_schema='public'
-               AND table_name IN ('trips','trip_transport_requests','trip_stops','trip_drivers','trip_assets','trip_status_history');
-            IF tables_count <> 6 THEN
-              RAISE EXCEPTION 'Wave 0022 trips tables incomplete: %', tables_count;
-            END IF;
-
-            SELECT count(*) INTO rls_count
-              FROM pg_class c
-              JOIN pg_namespace n ON n.oid=c.relnamespace
-             WHERE n.nspname='public'
-               AND c.relname IN ('trips','trip_transport_requests','trip_stops','trip_drivers','trip_assets','trip_status_history')
-               AND c.relrowsecurity;
-            IF rls_count <> 6 THEN
-              RAISE EXCEPTION 'Wave 0022 trips RLS incomplete: %', rls_count;
-            END IF;
-
-            IF EXISTS (
-              SELECT 1
-                FROM unnest(ARRAY['trips','trip_transport_requests','trip_stops','trip_drivers','trip_assets']) AS t(table_name)
-               WHERE NOT has_table_privilege('nexora_app',format('public.%I',table_name),'SELECT')
-                  OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'INSERT')
-                  OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'UPDATE')
-                  OR has_table_privilege('nexora_app',format('public.%I',table_name),'DELETE')
-            ) THEN
-              RAISE EXCEPTION 'Wave 0022 mutable trip privileges are incorrect';
-            END IF;
-
-            IF NOT has_table_privilege('nexora_app','public.trip_status_history','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.trip_status_history','INSERT')
-               OR has_table_privilege('nexora_app','public.trip_status_history','UPDATE')
-               OR has_table_privilege('nexora_app','public.trip_status_history','DELETE') THEN
-              RAISE EXCEPTION 'Wave 0022 trip_status_history must remain append-only';
-            END IF;
-
-            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='trip_transport_requests_active_request_unique')
-               OR NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='trip_transport_requests_active_contract_unique') THEN
-              RAISE EXCEPTION 'Wave 0022 active trip request/contract uniqueness is missing';
-            END IF;
+              FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+             WHERE n.nspname='public' AND c.relname IN ('transport_request_items','transport_request_packages','transport_request_requirements','transport_request_references','transport_request_status_history','transport_request_events','freight_lanes') AND c.relrowsecurity;
+            IF rls_count <> 7 THEN RAISE EXCEPTION 'Wave 0019 freight normalization RLS incomplete: %', rls_count; END IF;
+            IF NOT has_table_privilege('nexora_app','public.freight_lanes','SELECT') OR NOT has_table_privilege('nexora_app','public.freight_lanes','INSERT') OR NOT has_table_privilege('nexora_app','public.freight_lanes','UPDATE') OR has_table_privilege('nexora_app','public.freight_lanes','DELETE') THEN RAISE EXCEPTION 'Wave 0019 freight_lanes runtime privileges are incorrect'; END IF;
+            IF has_table_privilege('nexora_app','public.transport_request_status_history','UPDATE') OR has_table_privilege('nexora_app','public.transport_request_status_history','DELETE') OR has_table_privilege('nexora_app','public.transport_request_events','UPDATE') OR has_table_privilege('nexora_app','public.transport_request_events','DELETE') THEN RAISE EXCEPTION 'Wave 0019 history/events must remain append-only'; END IF;
+            SELECT count(*) INTO tables_count FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('matching_rules','matching_preferences','matching_runs','matching_candidates','matching_candidate_scores','matching_rule_results','matching_rejections');
+            IF tables_count <> 7 THEN RAISE EXCEPTION 'Wave 0020 matching tables incomplete: %', tables_count; END IF;
+            SELECT count(*) INTO rls_count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('matching_rules','matching_preferences','matching_runs','matching_candidates','matching_candidate_scores','matching_rule_results','matching_rejections') AND c.relrowsecurity;
+            IF rls_count <> 7 THEN RAISE EXCEPTION 'Wave 0020 matching RLS incomplete: %', rls_count; END IF;
+            IF EXISTS (SELECT 1 FROM unnest(ARRAY['matching_rules','matching_preferences','matching_runs']) AS t(table_name) WHERE NOT has_table_privilege('nexora_app',format('public.%I',table_name),'SELECT') OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'INSERT') OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'UPDATE') OR has_table_privilege('nexora_app',format('public.%I',table_name),'DELETE')) THEN RAISE EXCEPTION 'Wave 0020 mutable matching privileges are incorrect'; END IF;
+            IF EXISTS (SELECT 1 FROM unnest(ARRAY['matching_candidates','matching_candidate_scores','matching_rule_results','matching_rejections']) AS t(table_name) WHERE NOT has_table_privilege('nexora_app',format('public.%I',table_name),'SELECT') OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'INSERT') OR has_table_privilege('nexora_app',format('public.%I',table_name),'UPDATE') OR has_table_privilege('nexora_app',format('public.%I',table_name),'DELETE')) THEN RAISE EXCEPTION 'Wave 0020 historical matching privileges are incorrect'; END IF;
+            SELECT count(*) INTO tables_count FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('negotiation_threads','negotiation_participants','negotiation_messages');
+            IF tables_count <> 3 THEN RAISE EXCEPTION 'Wave 0021 negotiation tables incomplete: %', tables_count; END IF;
+            SELECT count(*) INTO rls_count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('negotiation_threads','negotiation_participants','negotiation_messages') AND c.relrowsecurity;
+            IF rls_count <> 3 THEN RAISE EXCEPTION 'Wave 0021 negotiation RLS incomplete: %', rls_count; END IF;
+            IF EXISTS (SELECT 1 FROM unnest(ARRAY['negotiation_threads','negotiation_participants']) AS t(table_name) WHERE NOT has_table_privilege('nexora_app',format('public.%I',table_name),'SELECT') OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'INSERT') OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'UPDATE') OR has_table_privilege('nexora_app',format('public.%I',table_name),'DELETE')) THEN RAISE EXCEPTION 'Wave 0021 mutable negotiation privileges are incorrect'; END IF;
+            IF NOT has_table_privilege('nexora_app','public.negotiation_messages','SELECT') OR NOT has_table_privilege('nexora_app','public.negotiation_messages','INSERT') OR has_table_privilege('nexora_app','public.negotiation_messages','UPDATE') OR has_table_privilege('nexora_app','public.negotiation_messages','DELETE') THEN RAISE EXCEPTION 'Wave 0021 negotiation_messages must remain append-only'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='negotiation_messages' AND t.tgname='negotiation_messages_reply_scope_trigger' AND NOT t.tgisinternal) THEN RAISE EXCEPTION 'Wave 0021 reply scope trigger is missing'; END IF;
+            SELECT count(*) INTO tables_count FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('trips','trip_transport_requests','trip_stops','trip_drivers','trip_assets','trip_status_history');
+            IF tables_count <> 6 THEN RAISE EXCEPTION 'Wave 0022 trips tables incomplete: %', tables_count; END IF;
+            SELECT count(*) INTO rls_count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('trips','trip_transport_requests','trip_stops','trip_drivers','trip_assets','trip_status_history') AND c.relrowsecurity;
+            IF rls_count <> 6 THEN RAISE EXCEPTION 'Wave 0022 trips RLS incomplete: %', rls_count; END IF;
+            IF EXISTS (SELECT 1 FROM unnest(ARRAY['trips','trip_transport_requests','trip_stops','trip_drivers','trip_assets']) AS t(table_name) WHERE NOT has_table_privilege('nexora_app',format('public.%I',table_name),'SELECT') OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'INSERT') OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'UPDATE') OR has_table_privilege('nexora_app',format('public.%I',table_name),'DELETE')) THEN RAISE EXCEPTION 'Wave 0022 mutable trip privileges are incorrect'; END IF;
+            IF NOT has_table_privilege('nexora_app','public.trip_status_history','SELECT') OR NOT has_table_privilege('nexora_app','public.trip_status_history','INSERT') OR has_table_privilege('nexora_app','public.trip_status_history','UPDATE') OR has_table_privilege('nexora_app','public.trip_status_history','DELETE') THEN RAISE EXCEPTION 'Wave 0022 trip_status_history must remain append-only'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='trip_transport_requests_active_request_unique') OR NOT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='trip_transport_requests_active_contract_unique') THEN RAISE EXCEPTION 'Wave 0022 active trip request/contract uniqueness is missing'; END IF;
           END
           $block$;
           SQL
@@ -364,4 +208,3 @@ jobs:
             echo "- Wave 0022 trips core baseline: verified"
             echo "- Production: not addressable by this workflow"
           } >> "$GITHUB_STEP_SUMMARY"
-
