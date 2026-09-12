@@ -3,9 +3,9 @@
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
-const DEFAULT_PROJECT_ID = 'raspy-river-76339604';
+const DEFAULT_PROJECT_ID = 'morning-grass-06967990';
 const DEFAULT_DATABASE = 'nexora';
-const DEFAULT_ROLE = 'neondb_owner';
+const DEFAULT_ROLE = 'nexora_owner';
 const DEFAULT_ENVIRONMENT = 'development';
 
 const BRANCH_BY_ENVIRONMENT = Object.freeze({
@@ -29,7 +29,7 @@ Options:
   --branch <name>                                  Override the branch resolved from environment
   --project-id <id>                                Neon project ID
   --database <name>                                Database name (default: nexora)
-  --role <name>                                    PostgreSQL role (default: neondb_owner)
+  --role <name>                                    PostgreSQL role (default: nexora_owner)
   --file <path>                                    Execute a SQL file
   --command <sql>                                  Execute one SQL command
   --allow-write                                    Disable the read-only guard
