@@ -47,6 +47,35 @@ async function run(): Promise<void> {
       'nexora_app must never bypass row-level security',
     );
 
+    const unprotectedTenantTables = await database.withUserDiscoveryContext(
+      USER_A,
+      async (client) => {
+        const result = await client.query<{ table_name: string }>(
+          `SELECT c.relname AS table_name
+             FROM pg_class c
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = 'public'
+               AND c.relkind = 'r'
+               AND EXISTS (
+                 SELECT 1
+                   FROM pg_attribute a
+                  WHERE a.attrelid = c.oid
+                    AND a.attnum > 0
+                    AND NOT a.attisdropped
+                    AND a.attname = 'tenant_id'
+               )
+               AND c.relrowsecurity = false
+             ORDER BY c.relname`,
+        );
+        return result.rows.map((row) => row.table_name);
+      },
+    );
+    assert.deepEqual(
+      unprotectedTenantTables,
+      [],
+      'every public table carrying tenant_id must have PostgreSQL RLS enabled',
+    );
+
     assert.equal(
       await memberships.isActiveMember(USER_A, TENANT_A),
       true,
