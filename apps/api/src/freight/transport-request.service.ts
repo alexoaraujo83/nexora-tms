@@ -17,6 +17,7 @@ import {
   requireUuid,
   type TransportRequestStatus,
 } from './transport-request.validation.js';
+import type { TransportRequestListQuery } from './transport-request-list.validation.js';
 
 export interface TransportRequest {
   readonly id: string;
@@ -83,11 +84,15 @@ export class TransportRequestService {
     private readonly database: TenantDatabaseService,
   ) {}
 
-  async list(): Promise<readonly TransportRequest[]> {
+  async list(query: TransportRequestListQuery = { limit: 50, offset: 0 }): Promise<readonly TransportRequest[]> {
     const context = this.tenantContext.require();
     return this.database.withTenantContext(context, async (client) => {
-      const result = await client.query<TransportRequestRow>(`${requestSelect}
-        ORDER BY planned_pickup_at, created_at, id`);
+      const result = await client.query<TransportRequestRow>(
+        `${requestSelect}
+          ORDER BY planned_pickup_at, created_at, id
+          LIMIT $1 OFFSET $2`,
+        [query.limit, query.offset],
+      );
       return result.rows.map(mapTransportRequest);
     });
   }
