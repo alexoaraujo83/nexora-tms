@@ -6,3 +6,5 @@
 .github/workflows/**
 packages/database/migrations/**
 pnpm-lock.yaml
+docs/architecture/MODULE-CATALOG-AND-TRACEABILITY.md
+docs/NEXORA-TMS-COMPLETE-DOCUMENTATION.md
