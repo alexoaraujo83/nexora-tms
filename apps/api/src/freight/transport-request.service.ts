@@ -84,7 +84,9 @@ export class TransportRequestService {
     private readonly database: TenantDatabaseService,
   ) {}
 
-  async list(query: TransportRequestListQuery = { limit: 50, offset: 0 }): Promise<readonly TransportRequest[]> {
+  async list(
+    query: TransportRequestListQuery = { limit: 50, offset: 0 },
+  ): Promise<readonly TransportRequest[]> {
     const context = this.tenantContext.require();
     return this.database.withTenantContext(context, async (client) => {
       const result = await client.query<TransportRequestRow>(
