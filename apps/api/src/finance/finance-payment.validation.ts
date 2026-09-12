@@ -130,16 +130,20 @@ function requireTransactionKind(value: unknown): CarrierPaymentTransactionKind {
 function requireMoney(value: unknown, field: string): string {
   const text =
     typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
+
   if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(text)) {
     throw new BadRequestException(
       `${field} must be a positive monetary value with up to 2 decimals`,
     );
   }
-  const numeric = Number(text);
-  if (!Number.isFinite(numeric) || numeric <= 0) {
+
+  const [integerPart, decimalPart = ''] = text.split('.');
+  if (/^0+$/.test(integerPart) && /^0*$/.test(decimalPart)) {
     throw new BadRequestException(`${field} must be greater than zero`);
   }
-  return numeric.toFixed(2);
+
+  // Keep money as a decimal string. Do not round through IEEE-754 Number arithmetic.
+  return `${integerPart}.${decimalPart.padEnd(2, '0')}`;
 }
 
 function optionalText(value: unknown, field: string, max: number): string | null {
